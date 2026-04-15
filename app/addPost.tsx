@@ -1,15 +1,15 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import {
-    Button,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableWithoutFeedback,
-    View,
+  Button,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import { postData } from "./services/api";
 
@@ -37,12 +37,10 @@ export default function AddPost() {
   };
 
   return (
-    // Membungkus layar agar menghindari keyboard
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      {/* Mendeteksi klik di area kosong untuk menutup keyboard */}
       <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
         <View style={styles.container}>
           <Text style={styles.header}>Add New Post</Text>
@@ -88,6 +86,6 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     borderRadius: 5,
   },
-  textArea: { height: 100, textAlignVertical: "top" }, // Tambahan agar text multiline mulai dari atas
+  textArea: { height: 100, textAlignVertical: "top" },
   buttonContainer: { flexDirection: "row", justifyContent: "center" },
 });

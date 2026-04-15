@@ -23,9 +23,7 @@ export default function PostDetail() {
   const getUserData = () => {
     getUserDetail(Number(userId))
       .then((res) => {
-        if (res.status === 200) {
-          setUser(res.data);
-        }
+        if (res.status === 200) setUser(res.data);
       })
       .catch((err) => console.log(err));
   };
@@ -33,9 +31,7 @@ export default function PostDetail() {
   const getPostDetailData = () => {
     getPostDetail(Number(id))
       .then((res) => {
-        if (res.status === 200) {
-          setPost(res.data);
-        }
+        if (res.status === 200) setPost(res.data);
       })
       .catch((err) => console.log(err));
   };
@@ -43,26 +39,30 @@ export default function PostDetail() {
   const getCommentsData = () => {
     getPostComments(Number(id))
       .then((res) => {
-        if (res.status === 200) {
-          setComments(res.data);
-        }
+        if (res.status === 200) setComments(res.data);
       })
       .catch((err) => console.log(err));
   };
 
   return (
     <ScrollView style={styles.container}>
-      {/* Bagian Detail Post */}
-      <Text style={styles.title}>{post?.title}</Text>
-      <Text style={styles.body}>{post?.body}</Text>
-      {/* Bagian Author */}
+      {post ? (
+        <View>
+          <Text style={styles.title}>{post.title}</Text>
+          <Text style={styles.body}>{post.body}</Text>
+        </View>
+      ) : (
+        <Text style={styles.loading}>Loading Post...</Text>
+      )}
+
       <View style={styles.authorBox}>
         <Text style={styles.boldText}>Post Created By:</Text>
-        <Text>Name: {user?.name}</Text>
-        <Text>Email: {user?.email}</Text>
+        <Text>Name: {user ? user.name : "Loading..."}</Text>
+        <Text>Email: {user ? user.email : "Loading..."}</Text>
       </View>
-      {/* Bagian Komentar */}
+
       <Text style={styles.commentHeader}>Comments:</Text>
+
       {comments.map((comment) => (
         <View key={comment.id} style={styles.commentBox}>
           <Text style={styles.boldText}>{comment.email}</Text>
@@ -70,13 +70,20 @@ export default function PostDetail() {
           <Text>{comment.body}</Text>
         </View>
       ))}
-      <View style={{ height: 40 }} /> {/* Spacer bawah */}
+
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 15 },
+  loading: {
+    textAlign: "center",
+    marginTop: 20,
+    fontStyle: "italic",
+    marginBottom: 20,
+  },
   title: {
     textAlign: "center",
     fontWeight: "bold",

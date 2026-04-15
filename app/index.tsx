@@ -22,7 +22,6 @@ export default function Index() {
 
   return (
     <View style={{ flex: 1, padding: 10 }}>
-      {/* Tombol Add New Post untuk Tugas 1 */}
       <View style={{ marginBottom: 10 }}>
         <Button
           title="Add New Post"
