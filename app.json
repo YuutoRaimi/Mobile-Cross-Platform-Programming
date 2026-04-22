@@ -38,6 +38,20 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to take photos and record videos."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to select and upload media.",
+          "savePhotosPermission": "Allow $(PRODUCT_NAME) to save photos to your library.",
+          "isAccessMediaLocationEnabled": true
+        }
       ]
     ],
     "experiments": {
