@@ -11,7 +11,7 @@ export default function Index() {
   }, []);
 
   const getAllPosts = () => {
-    getPosts().then((res) => {
+    getPosts().then((res: any) => {
       if (res.status === 200) {
         setPosts(res.data);
       } else {
