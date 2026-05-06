@@ -1,152 +1,300 @@
+import { decode } from "base64-arraybuffer";
+import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
-import React, { useRef, useState } from "react";
-import { Button, Dimensions, StyleSheet, Text, View } from "react-native";
-import MapView, { Marker, Region, UrlTile } from "react-native-maps";
-
-type Coordinates = {
-  latitude: number;
-  longitude: number;
-};
-
-type InteractionMode = "tap" | "drag";
-
-const { height } = Dimensions.get("window");
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Button,
+  Dimensions,
+  Image,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import MapView, { Marker } from "react-native-maps";
+import { supabase } from "../utils/supabase";
 
 export default function App() {
-  const [location, setLocation] = useState<Coordinates | null>(null);
-  const [mode, setMode] = useState<InteractionMode>("tap");
+  const [imageAsset, setImageAsset] =
+    useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [location, setLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [locationSource, setLocationSource] = useState<string>("");
 
-  const mapRef = useRef<MapView | null>(null);
+  useEffect(() => {
+    (async () => {
+      await Location.requestForegroundPermissionsAsync();
+      await ImagePicker.requestCameraPermissionsAsync();
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+    })();
+  }, []);
 
-  const getLocation = async (): Promise<void> => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") {
-      alert("Permission denied! Please allow location access.");
+  const openCamera = async () => {
+    let result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.5,
+      base64: true,
+      exif: true,
+    });
+
+    if (!result.canceled && result.assets[0].base64) {
+      setImageAsset(result.assets[0]);
+      setIsSaved(false);
+      setLocation(null);
+    }
+  };
+
+  const openGallery = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.5,
+      base64: true,
+      exif: true,
+    });
+
+    if (!result.canceled && result.assets[0].base64) {
+      setImageAsset(result.assets[0]);
+      setIsSaved(false);
+      setLocation(null);
+    }
+  };
+
+  const saveImage = async () => {
+    if (!imageAsset || !imageAsset.base64) {
+      Alert.alert("Perhatian", "Pilih atau ambil gambar terlebih dahulu!");
       return;
     }
 
-    const loc = await Location.getCurrentPositionAsync({});
+    setLoading(true);
 
-    const currentCoords = {
-      latitude: loc.coords.latitude,
-      longitude: loc.coords.longitude,
-    };
+    try {
+      let finalLatitude = 0;
+      let finalLongitude = 0;
+      let source = "";
 
-    setLocation(currentCoords);
+      if (
+        imageAsset.exif &&
+        imageAsset.exif.GPSLatitude &&
+        imageAsset.exif.GPSLongitude
+      ) {
+        let lat = imageAsset.exif.GPSLatitude;
+        let lon = imageAsset.exif.GPSLongitude;
 
-    mapRef.current?.animateToRegion(
-      {
-        latitude: currentCoords.latitude,
-        longitude: currentCoords.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      },
-      1000,
-    );
-  };
+        if (imageAsset.exif.GPSLatitudeRef === "S" && lat > 0) lat = -lat;
+        if (imageAsset.exif.GPSLongitudeRef === "W" && lon > 0) lon = -lon;
 
-  const region: Region | undefined = location
-    ? {
-        latitude: location.latitude,
-        longitude: location.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
+        finalLatitude = lat;
+        finalLongitude = lon;
+        source = "EXIF Metadata Foto Asli";
+      } else {
+        let loc = await Location.getCurrentPositionAsync({});
+        finalLatitude = loc.coords.latitude;
+        finalLongitude = loc.coords.longitude;
+        source = "GPS Real-time (Lokasi HP saat ini)";
       }
-    : undefined;
+
+      setLocation({ latitude: finalLatitude, longitude: finalLongitude });
+      setLocationSource(source);
+
+      const fileName = `photo-${Date.now()}.jpg`;
+      const { error: storageError } = await supabase.storage
+        .from("camera")
+        .upload(fileName, decode(imageAsset.base64!), {
+          contentType: "image/jpeg",
+        });
+
+      if (storageError) throw storageError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from("camera")
+        .getPublicUrl(fileName);
+
+      const imageUrl = publicUrlData.publicUrl;
+
+      const { error: dbError } = await supabase.from("photo").insert([
+        {
+          latitude: finalLatitude.toString(),
+          longitude: finalLongitude.toString(),
+          image_url: imageUrl,
+        },
+      ]);
+
+      if (dbError) throw dbError;
+
+      Alert.alert("Berhasil!", "Foto dan lokasi sukses disimpan ke Supabase.");
+      setIsSaved(true);
+    } catch (error: any) {
+      Alert.alert("Terjadi Kesalahan", error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
-      {!location ? (
-        <View style={styles.center}>
-          <Button title="Get Geo Location" onPress={getLocation} />
-        </View>
-      ) : (
+      <Text style={styles.title}>Yehuda Suprato - 00000091657</Text>
+
+      {!isSaved && (
         <>
-          <View style={styles.mapContainer}>
-            <MapView
-              ref={mapRef}
-              style={styles.map}
-              initialRegion={region}
-              onPress={(e) => {
-                if (mode === "tap") setLocation(e.nativeEvent.coordinate);
-              }}
-              onRegionChangeComplete={(newRegion) => {
-                if (mode === "drag") {
-                  setLocation({
-                    latitude: newRegion.latitude,
-                    longitude: newRegion.longitude,
-                  });
-                }
-              }}
-            >
-              <UrlTile urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
-
-              {mode === "tap" && (
-                <Marker coordinate={location} title="My Location" />
-              )}
-            </MapView>
-
-            {mode === "drag" && (
-              <View pointerEvents="none" style={styles.centerMarker}>
-                <Text style={{ fontSize: 40 }}>📍</Text>
-              </View>
-            )}
+          <View style={styles.buttonContainer}>
+            <Button
+              title="Open Camera"
+              onPress={openCamera}
+              disabled={loading}
+            />
           </View>
 
-          <View style={styles.info}>
-            <Text style={styles.label}>Informasi Lokasi:</Text>
-            <Text>Latitude: {location.latitude.toFixed(6)}</Text>
-            <Text>Longitude: {location.longitude.toFixed(6)}</Text>
-
-            <Text
-              style={{ marginTop: 15, marginBottom: 5, fontWeight: "bold" }}
-            >
-              Mode Interaksi:
-            </Text>
-            <View style={styles.buttonRow}>
-              <Button
-                title="Mode Tap Peta"
-                onPress={() => setMode("tap")}
-                color={mode === "tap" ? "#007AFF" : "#A9A9A9"}
-              />
-              <Button
-                title="Mode Drag Marker"
-                onPress={() => setMode("drag")}
-                color={mode === "drag" ? "#007AFF" : "#A9A9A9"}
-              />
-            </View>
-
-            <View style={{ marginTop: 15 }}>
-              <Button title="Refresh Current Location" onPress={getLocation} />
-            </View>
+          <View style={styles.buttonContainer}>
+            <Button
+              title="Open Gallery"
+              onPress={openGallery}
+              disabled={loading}
+              color="#ff9800"
+            />
           </View>
         </>
+      )}
+
+      {imageAsset && !isSaved && (
+        <View style={styles.previewContainer}>
+          <Image source={{ uri: imageAsset.uri }} style={styles.imagePreview} />
+          <View style={styles.buttonContainer}>
+            <Button
+              title="Save Image"
+              onPress={saveImage}
+              disabled={loading}
+              color="#4caf50"
+            />
+          </View>
+        </View>
+      )}
+
+      {loading && (
+        <ActivityIndicator
+          size="large"
+          color="#0000ff"
+          style={{ marginTop: 20 }}
+        />
+      )}
+
+      {isSaved && location && (
+        <View style={styles.mapContainer}>
+          <Text style={styles.locationText}>Lokasi Foto Disimpan:</Text>
+          <Text style={styles.sourceText}>Sumber Lokasi: {locationSource}</Text>
+
+          <MapView
+            style={styles.map}
+            initialRegion={{
+              latitude: location.latitude,
+              longitude: location.longitude,
+              latitudeDelta: 0.005,
+              longitudeDelta: 0.005,
+            }}
+          >
+            <Marker
+              coordinate={{
+                latitude: location.latitude,
+                longitude: location.longitude,
+              }}
+              title="Foto Kamu"
+            >
+              <View style={styles.customMarker}>
+                <Image
+                  source={{ uri: imageAsset?.uri }}
+                  style={styles.markerImage}
+                />
+                <View style={styles.markerPointer} />
+              </View>
+            </Marker>
+          </MapView>
+
+          <View style={{ marginTop: 15, width: "80%" }}>
+            <Button title="Ambil Foto Lain" onPress={() => setIsSaved(false)} />
+          </View>
+        </View>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  mapContainer: {
-    height: height * 0.5,
-    width: "100%",
-    justifyContent: "center",
+  container: {
+    flex: 1,
     alignItems: "center",
+    paddingTop: 50,
+    backgroundColor: "#f5f7fb",
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 15,
+  },
+  buttonContainer: {
+    marginVertical: 5,
+    width: "80%",
+  },
+  previewContainer: {
+    alignItems: "center",
+    marginTop: 10,
+    width: "100%",
+  },
+  imagePreview: {
+    width: 200,
+    height: 200,
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+  mapContainer: {
+    flex: 1,
+    width: "100%",
+    alignItems: "center",
+    marginTop: 10,
+  },
+  locationText: {
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  sourceText: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 10,
+    fontStyle: "italic",
   },
   map: {
-    ...StyleSheet.absoluteFillObject,
+    width: Dimensions.get("window").width * 0.9,
+    height: 300,
+    borderRadius: 15,
   },
-  centerMarker: {
-    position: "absolute",
-    paddingBottom: 45,
+  customMarker: {
+    alignItems: "center",
+    justifyContent: "center",
   },
-  info: { flex: 1, padding: 16, backgroundColor: "#fff" },
-  label: { fontSize: 18, fontWeight: "bold", marginBottom: 8, color: "#333" },
-  buttonRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
+  markerImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: "#4caf50",
+  },
+  markerPointer: {
+    width: 0,
+    height: 0,
+    backgroundColor: "transparent",
+    borderStyle: "solid",
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderBottomWidth: 10,
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+    borderBottomColor: "#4caf50",
+    transform: [{ rotate: "180deg" }],
+    marginTop: -2,
   },
 });
