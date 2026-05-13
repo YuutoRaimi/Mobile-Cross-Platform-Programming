@@ -1,6 +1,7 @@
 import { decode } from "base64-arraybuffer";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
+import * as MediaLibrary from "expo-media-library";
 import * as Notifications from "expo-notifications";
 import React, { useEffect, useState } from "react";
 import {
@@ -115,6 +116,13 @@ export default function App() {
       setLocation({ latitude: finalLatitude, longitude: finalLongitude });
       setLocationSource(source);
 
+      if (imageAsset.uri) {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status === "granted") {
+          await MediaLibrary.saveToLibraryAsync(imageAsset.uri);
+        }
+      }
+
       const fileName = `photo-${Date.now()}.jpg`;
       const { error: storageError } = await supabase.storage
         .from("camera")
@@ -146,7 +154,7 @@ export default function App() {
       await Notifications.scheduleNotificationAsync({
         content: {
           title: "✅ Data Berhasil Disimpan",
-          body: `Data foto berhasil masuk database.\nLat: ${finalLatitude}\nLon: ${finalLongitude}`,
+          body: `Data foto berhasil masuk database.\n📍Lat: ${finalLatitude}\n📍Lon: ${finalLongitude}`,
         },
         trigger: null,
       });
