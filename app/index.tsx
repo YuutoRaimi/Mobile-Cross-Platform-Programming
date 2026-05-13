@@ -1,6 +1,7 @@
 import { decode } from "base64-arraybuffer";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
+import * as Notifications from "expo-notifications";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -14,6 +15,16 @@ import {
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import { supabase } from "../utils/supabase";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 export default function App() {
   const [imageAsset, setImageAsset] =
@@ -31,6 +42,7 @@ export default function App() {
       await Location.requestForegroundPermissionsAsync();
       await ImagePicker.requestCameraPermissionsAsync();
       await ImagePicker.requestMediaLibraryPermissionsAsync();
+      await Notifications.requestPermissionsAsync();
     })();
   }, []);
 
@@ -74,11 +86,11 @@ export default function App() {
 
     setLoading(true);
 
-    try {
-      let finalLatitude = 0;
-      let finalLongitude = 0;
-      let source = "";
+    let finalLatitude = 0;
+    let finalLongitude = 0;
+    let source = "";
 
+    try {
       if (
         imageAsset.exif &&
         imageAsset.exif.GPSLatitude &&
@@ -130,8 +142,24 @@ export default function App() {
 
       Alert.alert("Berhasil!", "Foto dan lokasi sukses disimpan ke Supabase.");
       setIsSaved(true);
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "✅ Data Berhasil Disimpan",
+          body: `Data foto berhasil masuk database.\nLat: ${finalLatitude}\nLon: ${finalLongitude}`,
+        },
+        trigger: null,
+      });
     } catch (error: any) {
       Alert.alert("Terjadi Kesalahan", error.message);
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "❌ Gagal Menyimpan Data",
+          body: `Gagal menyimpan data ke database.\nLat: ${finalLatitude || "N/A"}\nLon: ${finalLongitude || "N/A"}\nError: ${error.message}`,
+        },
+        trigger: null,
+      });
     } finally {
       setLoading(false);
     }
